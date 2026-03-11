@@ -1,0 +1,24 @@
+<!-- 
+  AndroidManifest.xml ADDITIONS for Quest 3
+  
+  Merge these into your existing AndroidManifest.xml at:
+  Assets/Plugins/Android/AndroidManifest.xml
+  
+  If the file doesn't exist, let Unity auto-generate it first:
+  Build Settings → Build → Cancel, then find the generated manifest.
+-->
+
+<!-- ADD these permissions inside the <manifest> tag: -->
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+<!-- ADD this feature inside the <manifest> tag: -->
+<uses-feature android:name="android.hardware.microphone" android:required="true" />
+
+<!--
+  ALSO ensure these Meta Quest features are present:
+  (Usually added automatically by Meta XR SDK)
+-->
+<uses-feature android:name="android.hardware.vr.headtracking" android:required="true" />
+<uses-feature android:name="com.oculus.feature.PASSTHROUGH" android:required="false" />
