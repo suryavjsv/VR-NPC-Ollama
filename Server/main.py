@@ -35,8 +35,8 @@ Never use markdown formatting, bullet points, or special characters in your resp
 speak naturally as if talking face to face.""",
 
     # Piper TTS
-    "piper_voice": "en_US-lessac-medium",
-    "piper_voice_path": "D:/Personal Files/Projects/VR_NPC_AI/Server/Sova/.piper-voices/en_US-lessac-medium/en_US-lessac-medium.onnx",
+    "piper_voice": "en_US-ryan-medium",
+    "piper_voice_path": "D:/Personal Files/Projects/VR-NPC-Ollama/Server/Sova/.piper-voices/en_US-ryan-medium/en_US-ryan-medium.onnx",
     "tts_sample_rate": 22050,
 
     # Server

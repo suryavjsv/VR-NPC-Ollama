@@ -7,28 +7,32 @@ namespace VRAssistant.NPC
     /// Drives viseme blend shapes from audio amplitude analysis.
     /// No OVR Lip Sync dependency — works with any Unity project.
     ///
-    /// How it works:
-    /// - OnAudioFilterRead captures audio samples from the AudioSource
-    /// - Amplitude is analyzed to detect vowel-like openness
-    /// - Visemes are selected based on amplitude bands and randomized
-    ///   to create natural-looking mouth movement
-    /// - Blend shapes are smoothly interpolated each frame
+    /// Supports driving both face mesh and teeth mesh blend shapes
+    /// simultaneously for realistic mouth movement.
     ///
     /// SETUP:
     /// 1. Attach to the same GameObject as the AudioSource
-    /// 2. Assign the SkinnedMeshRenderer with viseme blend shapes
-    /// 3. Map the 15 viseme blend shape indices
+    /// 2. Assign the face SkinnedMeshRenderer (e.g., AvatarHead)
+    /// 3. Assign the teeth SkinnedMeshRenderer (e.g., AvatarTeethLower) [optional]
+    /// 4. Map the 15 viseme blend shape indices for each mesh
     /// </summary>
     [RequireComponent(typeof(AudioSource))]
     public class LipSyncController : MonoBehaviour
     {
         [Header("References")]
-        [Tooltip("The SkinnedMeshRenderer with viseme blend shapes")]
+        [Tooltip("The SkinnedMeshRenderer with viseme blend shapes (face/head)")]
         [SerializeField] private SkinnedMeshRenderer faceMesh;
 
-        [Header("Viseme Blend Shape Mapping")]
-        [Tooltip("Blend shape index for each of the 15 visemes. Set to -1 to skip.")]
+        [Tooltip("The SkinnedMeshRenderer for lower teeth (optional)")]
+        [SerializeField] private SkinnedMeshRenderer teethMesh;
+
+        [Header("Face Viseme Blend Shape Mapping")]
+        [Tooltip("Blend shape index for each of the 15 visemes on face mesh. Set to -1 to skip.")]
         [SerializeField] private int[] visemeBlendShapeIndices = new int[15];
+
+        [Header("Teeth Viseme Blend Shape Mapping")]
+        [Tooltip("Blend shape index for each of the 15 visemes on teeth mesh. Set to -1 to skip.")]
+        [SerializeField] private int[] teethBlendShapeIndices = new int[15];
 
         [Header("Settings")]
         [SerializeField] private float blendShapeMultiplier = 1.5f;
@@ -67,6 +71,10 @@ namespace VRAssistant.NPC
             new[] { 10, 11, 12 },  // aa, E, ih - open vowels
             new[] { 13, 14 },      // oh, ou - rounded open
         };
+
+        // ─── Viseme Names (for reference) ──────────────────────
+        // 0:sil  1:PP  2:FF  3:TH  4:DD  5:kk  6:CH  7:SS
+        // 8:nn   9:RR  10:aa 11:E  12:ih 13:oh 14:ou
 
         // ─── Lifecycle ─────────────────────────────────────────
 
@@ -140,12 +148,18 @@ namespace VRAssistant.NPC
                     1f - smoothing
                 );
 
+                float weight = Mathf.Clamp(_currentVisemes[i] * 100f, 0f, 100f);
+
+                // Drive face mesh
                 if (i < visemeBlendShapeIndices.Length && visemeBlendShapeIndices[i] >= 0)
                 {
-                    faceMesh.SetBlendShapeWeight(
-                        visemeBlendShapeIndices[i],
-                        Mathf.Clamp(_currentVisemes[i] * 100f, 0f, 100f)
-                    );
+                    faceMesh.SetBlendShapeWeight(visemeBlendShapeIndices[i], weight);
+                }
+
+                // Drive teeth mesh
+                if (teethMesh != null && i < teethBlendShapeIndices.Length && teethBlendShapeIndices[i] >= 0)
+                {
+                    teethMesh.SetBlendShapeWeight(teethBlendShapeIndices[i], weight);
                 }
             }
         }
@@ -222,6 +236,7 @@ namespace VRAssistant.NPC
         {
             _isActive = false;
 
+            // Reset face blend shapes
             if (faceMesh != null)
             {
                 for (int i = 0; i < visemeBlendShapeIndices.Length; i++)
@@ -233,6 +248,18 @@ namespace VRAssistant.NPC
                 }
             }
 
+            // Reset teeth blend shapes
+            if (teethMesh != null)
+            {
+                for (int i = 0; i < teethBlendShapeIndices.Length; i++)
+                {
+                    if (teethBlendShapeIndices[i] >= 0)
+                    {
+                        teethMesh.SetBlendShapeWeight(teethBlendShapeIndices[i], 0f);
+                    }
+                }
+            }
+
             Array.Clear(_currentVisemes, 0, _currentVisemes.Length);
             Array.Clear(_targetVisemes, 0, _targetVisemes.Length);
             _smoothedAmplitude = 0f;
@@ -240,56 +267,53 @@ namespace VRAssistant.NPC
             Debug.Log("[LipSync] Stopped");
         }
 
-        [ContextMenu("Auto-Map Blend Shapes")]
-        public void AutoMapBlendShapes()
+        // ─── Auto Mapping ──────────────────────────────────────
+
+        private static readonly string[][] NamePatterns = {
+            new[] { "sil", "silence", "rest", "viseme_sil", "viseme_00" },
+            new[] { "pp", "viseme_pp", "p_b_m", "viseme_01" },
+            new[] { "ff", "viseme_ff", "f_v", "viseme_02" },
+            new[] { "th", "viseme_th", "viseme_03" },
+            new[] { "dd", "viseme_dd", "t_d", "viseme_04" },
+            new[] { "kk", "viseme_kk", "k_g", "viseme_05" },
+            new[] { "ch", "viseme_ch", "ch_j_sh", "viseme_06" },
+            new[] { "ss", "viseme_ss", "s_z", "viseme_07" },
+            new[] { "nn", "viseme_nn", "n_l", "viseme_08" },
+            new[] { "rr", "viseme_rr", "viseme_09" },
+            new[] { "aa", "viseme_aa", "viseme_10" },
+            new[] { "e", "viseme_e", "viseme_11" },
+            new[] { "ih", "viseme_ih", "viseme_12" },
+            new[] { "oh", "viseme_oh", "viseme_13" },
+            new[] { "ou", "viseme_ou", "viseme_14" }
+        };
+
+        private static readonly string[] VisemeLabels = {
+            "sil", "PP", "FF", "TH", "DD", "kk", "CH", "SS",
+            "nn", "RR", "aa", "E", "ih", "oh", "ou"
+        };
+
+        private int MapBlendShapes(SkinnedMeshRenderer mesh, int[] indices, string meshName)
         {
-            if (faceMesh == null)
-            {
-                Debug.LogError("[LipSync] No SkinnedMeshRenderer assigned");
-                return;
-            }
+            if (mesh == null) return 0;
 
-            string[][] namePatterns = {
-                new[] { "sil", "silence", "rest", "viseme_sil", "viseme_00" },
-                new[] { "pp", "viseme_pp", "p_b_m", "viseme_01" },
-                new[] { "ff", "viseme_ff", "f_v", "viseme_02" },
-                new[] { "th", "viseme_th", "viseme_03" },
-                new[] { "dd", "viseme_dd", "t_d", "viseme_04" },
-                new[] { "kk", "viseme_kk", "k_g", "viseme_05" },
-                new[] { "ch", "viseme_ch", "ch_j_sh", "viseme_06" },
-                new[] { "ss", "viseme_ss", "s_z", "viseme_07" },
-                new[] { "nn", "viseme_nn", "n_l", "viseme_08" },
-                new[] { "rr", "viseme_rr", "viseme_09" },
-                new[] { "aa", "viseme_aa", "viseme_10" },
-                new[] { "e", "viseme_e", "viseme_11" },
-                new[] { "ih", "viseme_ih", "viseme_12" },
-                new[] { "oh", "viseme_oh", "viseme_13" },
-                new[] { "ou", "viseme_ou", "viseme_14" }
-            };
-
-            string[] visemeLabels = {
-                "sil", "PP", "FF", "TH", "DD", "kk", "CH", "SS",
-                "nn", "RR", "aa", "E", "ih", "oh", "ou"
-            };
-
-            var mesh = faceMesh.sharedMesh;
-            int blendShapeCount = mesh.blendShapeCount;
+            var meshData = mesh.sharedMesh;
+            int blendShapeCount = meshData.blendShapeCount;
             int mapped = 0;
 
             for (int v = 0; v < 15; v++)
             {
-                visemeBlendShapeIndices[v] = -1;
+                indices[v] = -1;
                 bool found = false;
 
-                foreach (string pattern in namePatterns[v])
+                foreach (string pattern in NamePatterns[v])
                 {
                     for (int b = 0; b < blendShapeCount; b++)
                     {
-                        string bsName = mesh.GetBlendShapeName(b).ToLower();
+                        string bsName = meshData.GetBlendShapeName(b).ToLower();
                         if (bsName.Contains(pattern.ToLower()))
                         {
-                            visemeBlendShapeIndices[v] = b;
-                            Debug.Log($"[LipSync] Mapped {visemeLabels[v]} -> '{mesh.GetBlendShapeName(b)}' (index {b})");
+                            indices[v] = b;
+                            Debug.Log($"[LipSync] {meshName} mapped {VisemeLabels[v]} -> '{meshData.GetBlendShapeName(b)}' (index {b})");
                             mapped++;
                             found = true;
                             break;
@@ -299,26 +323,54 @@ namespace VRAssistant.NPC
                 }
 
                 if (!found)
-                    Debug.LogWarning($"[LipSync] No blend shape found for viseme: {visemeLabels[v]}");
+                    Debug.LogWarning($"[LipSync] {meshName} no blend shape found for viseme: {VisemeLabels[v]}");
             }
 
-            Debug.Log($"[LipSync] Auto-mapped {mapped}/15 visemes");
+            return mapped;
+        }
+
+        [ContextMenu("Auto-Map Blend Shapes")]
+        public void AutoMapBlendShapes()
+        {
+            if (faceMesh == null)
+            {
+                Debug.LogError("[LipSync] No face SkinnedMeshRenderer assigned");
+                return;
+            }
+
+            // Map face mesh
+            int faceMapped = MapBlendShapes(faceMesh, visemeBlendShapeIndices, "Face");
+            Debug.Log($"[LipSync] Face auto-mapped {faceMapped}/15 visemes");
+
+            // Map teeth mesh if assigned
+            if (teethMesh != null)
+            {
+                int teethMapped = MapBlendShapes(teethMesh, teethBlendShapeIndices, "Teeth");
+                Debug.Log($"[LipSync] Teeth auto-mapped {teethMapped}/15 visemes");
+            }
+            else
+            {
+                Debug.Log("[LipSync] No teeth mesh assigned, skipping teeth mapping");
+            }
         }
 
         [ContextMenu("List All Blend Shapes")]
         public void ListBlendShapes()
         {
-            if (faceMesh == null)
+            if (faceMesh != null)
             {
-                Debug.LogError("[LipSync] No SkinnedMeshRenderer assigned");
-                return;
+                var mesh = faceMesh.sharedMesh;
+                Debug.Log($"[LipSync] Face blend shapes on '{faceMesh.name}' ({mesh.blendShapeCount} total):");
+                for (int i = 0; i < mesh.blendShapeCount; i++)
+                    Debug.Log($"  [{i}] {mesh.GetBlendShapeName(i)}");
             }
 
-            var mesh = faceMesh.sharedMesh;
-            Debug.Log($"[LipSync] Blend shapes on '{faceMesh.name}' ({mesh.blendShapeCount} total):");
-            for (int i = 0; i < mesh.blendShapeCount; i++)
+            if (teethMesh != null)
             {
-                Debug.Log($"  [{i}] {mesh.GetBlendShapeName(i)}");
+                var mesh = teethMesh.sharedMesh;
+                Debug.Log($"[LipSync] Teeth blend shapes on '{teethMesh.name}' ({mesh.blendShapeCount} total):");
+                for (int i = 0; i < mesh.blendShapeCount; i++)
+                    Debug.Log($"  [{i}] {mesh.GetBlendShapeName(i)}");
             }
         }
     }

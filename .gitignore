@@ -105,3 +105,8 @@ Server/models/
 ehthumbs.db
 Thumbs.db
 desktop.ini
+
+# Binary / temp files
+*.dll
+*.utmp
+*.gguf

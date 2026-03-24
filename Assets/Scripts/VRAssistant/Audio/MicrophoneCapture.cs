@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.IO;
 using UnityEngine;
 
@@ -40,12 +41,18 @@ namespace VRAssistant.Audio
 
         // ─── Lifecycle ─────────────────────────────────────────
 
-        private void Start()
+        private IEnumerator Start()
         {
+            // Wait for permissions before querying microphone devices
+            if (PermissionGate.Instance != null)
+            {
+                yield return PermissionGate.Instance.WaitForPermissions();
+            }
+
             if (Microphone.devices.Length == 0)
             {
                 Debug.LogError("[Mic] No microphone found! Check Quest permissions.");
-                return;
+                yield break;
             }
 
             _micDevice = Microphone.devices[0];
